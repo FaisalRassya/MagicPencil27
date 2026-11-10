@@ -26,6 +26,8 @@ static send_event_t p_send_event;
 typedef struct { uint8_t *ptr; int32_t len; } Span;
 typedef void (*m_send_event_t)(void *self, uint32_t id, Span *bytes, void *mi);
 typedef void (*m_send_resp_t)(void *self, Span *keys, Span *items, void *mi);
+typedef void (*m_send_resp3_t)(void *self, Span *keys, Span *sizes, Span *items, void *mi); // FM 0.9.2435+
+static m_send_resp3_t o_m_send_resp3; static int g_resp3;
 static m_send_event_t o_m_send_event; static m_send_resp_t o_m_send_resp;
 static char g_respGrep[256]; static int g_respAll; static int g_hooked;
 static void *g_targets[16]; static int g_ntargets;
@@ -152,6 +154,22 @@ static void h_m_send_resp(void *self, Span *keys, Span *items, void *mi) {
   }
   o_m_send_resp(self, keys, items, mi);
 }
+static void h_m_send_resp3(void *self, Span *keys, Span *sizes, Span *items, void *mi) {
+  if (items && items->ptr && items->len > 0 && (g_respAll || (g_respGrep[0] && contains(items->ptr, (size_t)items->len, g_respGrep)))) {
+    EnterCriticalSection(&g_cs);
+    hex(g_hb1, sizes ? sizes->ptr : 0, sizes ? (size_t)sizes->len * 4 : 0, 4000);
+    logf_("RESPSZ sizes[%d]=%s", sizes ? sizes->len : 0, g_hb1);
+    hex(g_hb1, keys ? keys->ptr : 0, keys ? (size_t)keys->len * 8 : 0, 4000);
+    { /* 0.9.2435+: items start with a u32 item count; strip it so the log matches the old format */
+      const uint8_t *ip = items->ptr; int il = items->len;
+      if (il >= 4 && keys && *(const uint32_t *)ip == (uint32_t)keys->len) { ip += 4; il -= 4; }
+      hex(g_hb2, ip, (size_t)il, 34000);
+      LeaveCriticalSection(&g_cs);
+      logf_("RESP keys[%d]=%s items[%d]=%s", keys ? keys->len : 0, g_hb1, il, g_hb2);
+    }
+  }
+  o_m_send_resp3(self, keys, sizes, items, mi);
+}
 static void h_tick(ObjectRef *inst) {
   if (inst) { g_inst = *inst; g_haveInst = 1; }
   o_tick(inst);
@@ -164,6 +182,18 @@ static void h_tick(ObjectRef *inst) {
 typedef void *(*il2_domain_get_t)(void); typedef void **(*il2_domain_get_assemblies_t)(void *, size_t *);
 typedef void *(*il2_assembly_get_image_t)(void *); typedef void *(*il2_class_from_name_t)(void *, const char *, const char *);
 typedef void *(*il2_method_from_name_t)(void *, const char *, int); typedef void *(*il2_thread_attach_t)(void *);
+typedef unsigned (*il2_param_count_t)(void *); typedef void *(*il2_get_param_t)(void *, unsigned); typedef char *(*il2_type_name_t)(void *);
+static void *g_last_mi;
+static void describe_method(HMODULE ga, void *mi, const char *what) {
+  il2_param_count_t pc = (il2_param_count_t)GetProcAddress(ga, "il2cpp_method_get_param_count");
+  il2_get_param_t gp = (il2_get_param_t)GetProcAddress(ga, "il2cpp_method_get_param");
+  il2_type_name_t tn = (il2_type_name_t)GetProcAddress(ga, "il2cpp_type_get_name");
+  if (!mi || !pc) return;
+  unsigned n = pc(mi); char buf[512]; int o = snprintf(buf, sizeof buf, "%s params=%u:", what, n);
+  for (unsigned i = 0; i < n && gp && tn && o < 480; i++) { char *t = tn(gp(mi, i)); o += snprintf(buf + o, sizeof buf - o, " %s", t ? t : "?"); }
+  logf_("%s", buf);
+}
+static unsigned param_count(HMODULE ga, void *mi) { il2_param_count_t pc = (il2_param_count_t)GetProcAddress(ga, "il2cpp_method_get_param_count"); return (mi && pc) ? pc(mi) : 0; }
 static void *resolve_managed(HMODULE ga, const char *ns, const char *cls, const char *meth, int argc) {
   il2_domain_get_t dget = (il2_domain_get_t)GetProcAddress(ga, "il2cpp_domain_get");
   il2_domain_get_assemblies_t dasm = (il2_domain_get_assemblies_t)GetProcAddress(ga, "il2cpp_domain_get_assemblies");
@@ -179,6 +209,7 @@ static void *resolve_managed(HMODULE ga, const char *ns, const char *cls, const 
     void *img = aimg(as[i]); if (!img) continue;
     void *k = cfn(img, ns, cls); if (!k) continue;
     void *mi = mfn(k, meth, argc); if (!mi) continue;
+    g_last_mi = mi;
     return *(void **)mi; // MethodInfo->methodPointer
   }
   return 0;
@@ -209,14 +240,21 @@ static DWORD WINAPI init_thread(LPVOID self) {
   if (cf) { while (fgets(line, sizeof line, cf)) { if (!strncmp(line, "ga_send_event=", 14)) rvaEv = strtoul(line + 14, 0, 16); if (!strncmp(line, "ga_send_resp=", 13)) rvaResp = strtoul(line + 13, 0, 16); } fclose(cf); }
   void *autoEv = 0, *autoResp = 0;
   if (ga) { for (int w = 0; w < 300 && !autoEv; w++) { autoEv = resolve_managed(ga, "FM.GamePlugin", "GameReceiver", "SendEvent", 2); if (!autoEv) Sleep(100); }
-            autoResp = resolve_managed(ga, "FM.GamePlugin", "GameReceiver", "SendDataResponse", 2); }
+            autoResp = resolve_managed(ga, "FM.GamePlugin", "GameReceiver", "SendDataResponse", 2);
+            if (!autoResp) {
+              g_last_mi = 0; void *any = resolve_managed(ga, "FM.GamePlugin", "GameReceiver", "SendDataResponse", -1);
+              describe_method(ga, g_last_mi, "SendDataResponse(changed)");
+              if (any && param_count(ga, g_last_mi) == 2) autoResp = any; // same shape, safe to hook
+              else if (any && param_count(ga, g_last_mi) == 3) { autoResp = any; g_resp3 = 1; } // keys, sizes, items
+            } }
   logf_("il2cpp resolve: SendEvent=%p SendDataResponse=%p (cfg ev=%lx resp=%lx)", autoEv, autoResp, rvaEv, rvaResp);
   if (autoEv) { rvaEv = (unsigned long)((uint8_t *)autoEv - (uint8_t *)ga); }
   if (autoResp) { rvaResp = (unsigned long)((uint8_t *)autoResp - (uint8_t *)ga); }
   if (ga && rvaEv) { void *t = (uint8_t *)ga + rvaEv; if (MH_CreateHook(t, h_m_send_event, (void **)&o_m_send_event) == MH_OK) g_targets[g_ntargets++] = t; }
-  if (ga && rvaResp) { void *t = (uint8_t *)ga + rvaResp; if (MH_CreateHook(t, h_m_send_resp, (void **)&o_m_send_resp) == MH_OK) g_targets[g_ntargets++] = t; }
+  if (ga && rvaResp) { void *t = (uint8_t *)ga + rvaResp;
+    if (g_resp3 ? MH_CreateHook(t, h_m_send_resp3, (void **)&o_m_send_resp3) == MH_OK : MH_CreateHook(t, h_m_send_resp, (void **)&o_m_send_resp) == MH_OK) g_targets[g_ntargets++] = t; }
   int re = MH_EnableHook(MH_ALL_HOOKS); g_hooked = 1;
-  logf_("fmhook v3: hooks create %d %d %d %d %d managed ev=%lx resp=%lx (n=%d) enable %d", r1, r2, r3, r4, r5, rvaEv, rvaResp, g_ntargets, re);
+  logf_("fmhook v6: hooks create %d %d %d %d %d managed ev=%lx resp=%lx (n=%d) enable %d", r1, r2, r3, r4, r5, rvaEv, rvaResp, g_ntargets, re);
   return 0;
 }
 
@@ -227,7 +265,7 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID r) {
     GetModuleFileNameA(h, g_dir, MAX_PATH); char *s = strrchr(g_dir, '\\'); if (s) *s = 0;
     char lp[MAX_PATH]; snprintf(lp, MAX_PATH, "%s\\fmhook.log", g_dir);
     g_log = fopen(lp, "ab");
-    logf_("=== fmhook v3 loaded pid=%lu", GetCurrentProcessId());
+    logf_("=== fmhook v6 loaded pid=%lu", GetCurrentProcessId());
     CloseHandle(CreateThread(0, 0, init_thread, h, 0, 0));
   }
   return TRUE;

@@ -1,6 +1,6 @@
 {
   "name": "magicpencil27",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MagicPencil27 - free, open-source, unofficial real-time editor for Football Manager 27",
   "main": "main.js",
   "license": "GPL-3.0-or-later",

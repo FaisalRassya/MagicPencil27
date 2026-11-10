@@ -12,7 +12,7 @@ const EnumProcessModulesEx = psapi.func('int __stdcall EnumProcessModulesEx(void
 const GetModuleFileNameExW = psapi.func('uint32 __stdcall GetModuleFileNameExW(void*, uint64, void*, uint32)');
 
 const SRC_DLL = path.join(__dirname, 'hook', 'fmhook.dll');
-const HOOK_NAME = 'fmhook3.dll'; // bump when fmhook.c changes (a loaded DLL cannot be replaced)
+const HOOK_NAME = 'fmhook6.dll'; // bump when fmhook.c changes (a loaded DLL cannot be replaced)
 const RUN_DIR = path.join(process.env.LOCALAPPDATA || os.tmpdir(), 'MagicPencil27', 'hook');
 
 function loadedHookPath(pid) {

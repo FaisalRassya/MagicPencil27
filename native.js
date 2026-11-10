@@ -171,6 +171,7 @@ function makeRuntime(target) {
     readU32() { return target.read(this.a, 4).readUInt32LE(0); }
     readS32() { return target.read(this.a, 4).readInt32LE(0); }
     readU64() { return target.read(this.a, 8).readBigUInt64LE(0); }
+    readByteArray(len) { return target.read(this.a, len); }
     readUtf8String(len) {
       if (len === undefined || len < 0) return this.readCString(1024, 'utf8');
       return target.read(this.a, len).toString('utf8');

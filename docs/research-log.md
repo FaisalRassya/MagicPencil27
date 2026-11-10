@@ -130,3 +130,8 @@ club without it rather than corrupting unrelated data.
   they document dozens more fields (contract wage/expiry, squad number,
   nationality, injuries, name editing, staff attributes, stadium capacity,
   etc.) with the exact same offset/encoding pattern used here.
+
+### v0.1.1 — FM27 patch 0.9.2435 (Game Pass)
+- Player vector moved to RVA 0x53b7de0 (delta -0x34b9f0 from the Steam baseline), outside the old ±1 MB search window, and its first element is now an `ACTUAL_PLAYER_AND_NON_PLAYER` (player-coach). `agent.js` now accepts both classes and, if the nearby search fails, scans the whole module image and picks the player vector whose club vector sits at the baseline's relative slot (+0x1B8). `native.js` gained `readByteArray`. Load takes about 12 s. Players 72,426, clubs 26,217. Player/club/contract offsets unchanged (verified on Haaland and Wycombe).
+- `GameReceiver.SendDataResponse` changed from `(Span<ulong> keys, Span<byte> items)` to `(Span<ulong> keys, Span<uint> sizes, Span<byte> items)`, and `items` now starts with a u32 item count. fmhook v6 logs each method's parameter types when the signature differs, hooks the 3-parameter form, strips the count prefix and logs sizes on a separate `RESPSZ` line, so the `RESP` log format is unchanged for the readers. `SendEvent` is unchanged.
+- research/vecscan.js: whole-image vector scanner used to find the new layout.

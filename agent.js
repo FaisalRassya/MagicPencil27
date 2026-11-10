@@ -85,21 +85,45 @@ function findDateByData(playersRva) {
   }
   return best ? best.rva : null;
 }
+// Fallback after an FM patch: scan the whole module image for player vectors.
+// The real list is the one whose club vector sits at the same relative slot as in the baseline.
+function scanForPlayers(isPc) {
+  var mod = getModule(), size = mod.size, CH = 0x100000, cands = [];
+  var lo = mod.base, hiA = mod.base.add(size);
+  for (var off = 0; off < size; off += CH) {
+    var buf; try { buf = mod.base.add(off).readByteArray(Math.min(CH + 16, size - off)); } catch (e) { continue; }
+    for (var i = 0; i + 16 <= buf.length && i < CH; i += 8) {
+      var b = buf.readBigUInt64LE(i), e = buf.readBigUInt64LE(i + 8);
+      if (b < 0x10000000n || b > 0x7fffffffffffn || e <= b) continue;
+      var bytes = e - b; if (bytes % 8n || bytes < 8000n || bytes > 80000000n) continue;
+      if (ptr(b).compare(lo) >= 0 && ptr(b).compare(hiA) < 0) continue;
+      var v = vecInfo(off + i);
+      if (v && isPc(v.cls) && v.n > 1000) cands.push({ rva: off + i, n: v.n });
+    }
+  }
+  var dc = BASE_RVA.clubs - BASE_RVA.players;
+  var good = cands.filter(function (c) { var cv = vecInfo(c.rva + dc); return cv && cv.cls === '.?AVCLUB@db@@'; });
+  var pick = (good.length ? good : cands).sort(function (a, b) { return b.n - a.n; })[0];
+  return pick || null;
+}
 function resolveRvas() {
   if (R) return R;
   var P = '.?AVACTUAL_PLAYER@db@@';
   // 1) players: biggest ACTUAL_PLAYER vector within +-1 MB of the baseline
   // search outward from the baseline; once a hit is found, take the biggest
   // ACTUAL_PLAYER vector in a small window around it (the full list).
-  var isP = function (a) { var v = vecInfo(a); return v && v.cls === P && v.n > 1000; };
+  var P2 = '.?AVACTUAL_PLAYER_AND_NON_PLAYER@db@@';
+  var isPc = function (c) { return c === P || c === P2; };
+  var isP = function (a) { var v = vecInfo(a); return v && isPc(v.cls) && v.n > 1000; };
   var hit = findNear(BASE_RVA.players, isP, 0x100000);
   var best = null;
   if (hit !== null) {
     for (var w = hit - 0x80; w <= hit + 0x80; w += 8) {
       var v = vecInfo(w);
-      if (v && v.cls === P && (!best || v.n > best.n)) best = { rva: w, n: v.n };
+      if (v && isPc(v.cls) && v.n > 1000 && (!best || v.n > best.n)) best = { rva: w, n: v.n };
     }
   }
+  if (!best) best = scanForPlayers(isPc);
   if (!best) throw new Error('Player list not found. Is a save loaded in FM27? (If FM was just patched, the editor needs updating.)');
   var delta = best.rva - BASE_RVA.players;
   var out = { delta: delta, players: best.rva, playerCount: best.n, warnings: [] };
