@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.log
+*.pdb
+*.lib
+*.exe
+hook/fmhook.dll
+hook/test/*.dll
+hook/live/
+research/memdiff_data/
+research/__pycache__/
+*.bak
+.DS_Store
+Thumbs.db

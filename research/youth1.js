@@ -1,0 +1,17 @@
+const scan = require('./heapscan.js');
+const run = require('./probe.js');
+const info = run("rpc.exports.getSaveInfo(); var b=playerArrayBounds(); var s=[]; for (var i=0;i<b.count;i++){ var p=b.dataPtr.add(i*8).readPointer(); if(!p.isNull()) s.push(p.toString()); } return { vt: plainPlayerVt(), list: s };");
+const main = new Set(info.list);
+const vts = new Set();
+const r0 = scan([['vt', BigInt(info.vt)]], { loSet: new Set([Number(BigInt(info.vt) & 0xffffffffn)]), max: 500000 });
+const extras = r0.hits.vt.map(a => '0x' + a.toString(16)).filter(a => !main.has(a));
+console.log('vtable hits', r0.hits.vt.length, 'main', main.size, 'extras', extras.length);
+const det = run("rpc.exports.getSaveInfo(); var L=" + JSON.stringify(extras.slice(0, 3000)) + "; var out=[]; L.forEach(function(a){ try{ var p=ptr(a); var by=p.add(0x312).readU16(); var r={a:a, name:playerName(p), uid:p.add(0x294).readU32(), ca:p.add(0x264).readU16(), pa:p.add(0x266).readU16(), by:by, club:playerClubName(p), nat:playerNation(p)}; out.push(r);}catch(e){} }); return out;");
+const byYear = {};
+for (const d of det) byYear[d.by] = (byYear[d.by] || 0) + 1;
+console.log('birth years', JSON.stringify(byYear));
+const young = det.filter(d => d.by >= 2009 && d.name);
+console.log('young extras', young.length);
+for (const d of young.slice(0, 40)) console.log(JSON.stringify(d));
+const wy = det.filter(d => /wycombe/i.test(d.club));
+console.log('wycombe extras', wy.length); for (const d of wy.slice(0, 30)) console.log(JSON.stringify(d));

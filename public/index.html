@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>MagicPencil27</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="sidebar">
+    <div id="brand">
+      <div class="wordmark"><span class="wm-fm">MagicPencil</span><span class="wm-27">27</span></div>
+      <div class="title">untuk Football Manager 27 · unofficial</div>
+    </div>
+    <div id="status-bar"><span class="dot"></span><span id="status-text">Connecting...</span></div>
+
+    <div class="action-group">
+      <button id="load-data-btn" class="action-btn primary">Load Data</button>
+      <div class="action-row">
+        <button id="save-changes-btn" class="action-btn save" disabled>Save Changes</button>
+        <button id="undo-last-btn" class="action-btn" disabled>Undo</button>
+      </div>
+    </div>
+    <div id="save-info" class="save-info hidden"></div>
+
+    <nav class="nav-list">
+      <button class="nav-item my-club-nav hidden" data-mode="myclub"><span class="nav-k">Klub saya</span><span class="my-club-label">Klub Saya</span></button>
+      <div class="nav-section-label">Database</div>
+      <button class="nav-item" data-mode="players">Players</button>
+      <button class="nav-item" data-mode="clubs">Clubs</button>
+      <button class="nav-item" data-mode="staff">Staff</button>
+      <button class="nav-item" data-mode="manager">Human Manager</button>
+      <button class="nav-item" data-mode="officials">Officials</button>
+      <button class="nav-item" data-mode="competitions">Competitions</button>
+      <button class="nav-item" data-mode="nations">Nations</button>
+      <button class="nav-item" data-mode="stadiums">Stadiums</button>
+      <div class="nav-section-label">Sesi</div>
+      <button class="nav-item active" data-mode="history">Edit History</button>
+      <button class="nav-item" data-mode="frozen">Atribut Terkunci</button>
+    </nav>
+
+    <div id="search-wrap" class="hidden">
+      <input id="search-box" type="text" placeholder="Click Load Data first..." disabled />
+    </div>
+    <div id="qs-chips" class="hidden"></div>
+    <div id="filter-wrap" class="hidden">
+      <div class="filter-row">
+        <input id="filter-ca" type="number" placeholder="CA >" min="1" max="200">
+        <input id="filter-pa" type="number" placeholder="PA >" min="1" max="200">
+      </div>
+      <div class="filter-row">
+        <input id="filter-age-min" type="number" placeholder="Age min" min="14" max="50">
+        <input id="filter-age-max" type="number" placeholder="Age max" min="14" max="50">
+      </div>
+      <div class="filter-row">
+        <select id="filter-status">
+          <option value="">Semua pemain</option>
+          <option value="injured">Hanya yang cedera</option>
+          <option value="banned">Hanya yang dilarang main</option>
+        </select>
+      </div>
+    </div>
+    <div id="bulk-bar" class="hidden">
+      <span id="bulk-count">0 selected</span>
+      <select id="bulk-field"></select>
+      <input id="bulk-value" type="number" placeholder="value" />
+      <button id="bulk-apply-btn">Stage for all</button>
+    </div>
+    <div id="results"></div>
+    <div id="history-panel"></div>
+    <div id="soon-panel" class="hidden empty-hint">This section isn't implemented yet — only Players and Clubs are wired up so far. See the project README for how to add more (it's the same offset/encoding pattern throughout).</div>
+  </div>
+  <div id="detail">
+    <div id="detail-empty"><div class="de-title">Belum ada data</div><div class="de-text">Buka save di FM27, lalu klik <b>Load Data</b>. Klub yang kamu latih langsung terbuka di sini.</div></div>
+    <div id="player-detail" class="hidden"></div>
+    <div id="club-detail" class="hidden"></div>
+    <div id="entity-detail" class="hidden"></div>
+    <div id="compare-detail" class="hidden"></div>
+  </div>
+  <div id="toast-wrap"></div>
+  <script src="app.js"></script>
+  <script src="extras.js"></script>
+  <script src="extras2.js"></script>
+  <script src="tactics.js"></script>
+  <script src="training.js"></script>
+  <script src="scout.js"></script>
+  <script src="contracts.js"></script>
+</body>
+</html>

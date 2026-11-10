@@ -1,0 +1,14 @@
+const scan = require('./heapscan.js');
+const run = require('./probe.js');
+const fs = require('fs');
+const info = run("rpc.exports.getSaveInfo(); var b=playerArrayBounds(); var s=[]; for (var i=0;i<b.count;i++){ var p=b.dataPtr.add(i*8).readPointer(); if(!p.isNull()) s.push(p.toString()); } return { vt: plainPlayerVt(), list: s };");
+const main = new Set(info.list);
+const r0 = scan([['vt', BigInt(info.vt)]], { loSet: new Set([Number(BigInt(info.vt) & 0xffffffffn)]), max: 500000 });
+const extras = r0.hits.vt.map(a => '0x' + a.toString(16)).filter(a => !main.has(a));
+fs.writeFileSync('extras.json', JSON.stringify(extras));
+const det = run("rpc.exports.getSaveInfo(); var L=" + JSON.stringify(extras) + "; var out=[]; function cn(q){ try{ var c=q.readPointer(); if(c.isNull()) return ''; var n=rttiName(c); if(n!=='.?AVCLUB@db@@') return '?'+n; return readFmString(c.add(0xC8)); }catch(e){return 'err';} } L.forEach(function(a){ try{ var p=ptr(a); if(p.add(0x294).readU32()!==0xFFFFFFFF) return; var by=p.add(0x312).readU16(); out.push({a:a, name:playerName(p), ca:p.add(0x264).readU16(), pa:p.add(0x266).readU16(), by:by, nat:playerNation(p), c390:cn(p.add(0x390)), t130:(function(){try{return p.add(0x130).readPointer().toString();}catch(e){return 'e';}})(), con:p.add(0x330).readPointer().toString()}); }catch(e){} }); return out;");
+const cnt = {}; det.forEach(d => { const k = d.nat + ' | ' + d.c390; cnt[k] = (cnt[k] || 0) + 1; });
+console.log('uid -1 extras', det.length);
+console.log(Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 40).map(x => x[1] + '  ' + x[0]).join('\n'));
+const wy = det.filter(d => /wycombe/i.test(d.c390));
+console.log('WYCOMBE', wy.length); wy.forEach(d => console.log(JSON.stringify(d)));
